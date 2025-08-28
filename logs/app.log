@@ -1,0 +1,22 @@
+2025-08-28 13:42:00,832 - INFO - root - Logging setup complete.
+2025-08-28 13:42:26,052 - INFO - root - Logging setup complete.
+2025-08-28 13:43:23,767 - INFO - root - Logging setup complete.
+2025-08-28 13:43:32,368 - INFO - root - Logging setup complete.
+2025-08-28 13:43:33,106 - INFO - root - Logging setup complete.
+2025-08-28 13:45:03,710 - INFO - root - Logging setup complete.
+2025-08-28 13:57:52,475 - INFO - root - Logging setup complete.
+2025-08-28 13:57:54,210 - INFO - root - Logging setup complete.
+2025-08-28 13:58:48,815 - INFO - root - Logging setup complete.
+2025-08-28 14:21:30,203 - INFO - root - Logging setup complete.
+2025-08-28 14:21:41,545 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=1
+2025-08-28 14:21:42,455 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=2
+2025-08-28 14:21:43,414 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=3
+2025-08-28 14:21:44,299 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=4
+2025-08-28 14:21:45,208 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=5
+2025-08-28 14:21:46,118 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=6
+2025-08-28 14:21:47,024 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=7
+2025-08-28 14:21:47,972 - INFO - core.scraper - Scraping page: https://ncode.syosetu.com/n2267be/?p=8
+2025-08-28 14:30:48,207 - WARNING - core.scraper - Selector '#novel_honbun' failed for https://ncode.syosetu.com/n2267be/1/. Trying fallback '.p-novel__body'.
+2025-08-28 14:31:42,165 - INFO - root - Logging setup complete.
+2025-08-28 14:38:26,743 - WARNING - core.scraper - Selector '#novel_honbun' failed for https://ncode.syosetu.com/n2267be/2/. Trying fallback '.p-novel__body'.
+2025-08-28 14:39:15,537 - INFO - root - Logging setup complete.
