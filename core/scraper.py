@@ -46,7 +46,6 @@ def scrape_novel_info(url: str) -> dict:
     title, author = None, None
     current_chapter_group = None 
 
-    # URL에서 ncode 추출
     ncode_match = re.search(r'/(n[a-z0-9]+)/', url, re.IGNORECASE)
     ncode = ncode_match.group(1).lower() if ncode_match else None
     if not ncode:

@@ -10,7 +10,7 @@ def setup_database(conn):
     주어진 연결을 사용해 데이터베이스의 모든 테이블 구조를 확인하고 생성합니다.
     """
     cursor = conn.cursor()
-    # novels 테이블에 'ncode' 컬럼 추가
+    # novels 테이블
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS novels (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +45,26 @@ def setup_database(conn):
             target_lang TEXT NOT NULL,
             UNIQUE(novel_id, original_term, target_lang),
             FOREIGN KEY (novel_id) REFERENCES novels (id)
+        )
+    ''')
+    # 제목 번역 캐시 테이블
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS title_translations (
+            original_text TEXT NOT NULL,
+            target_lang TEXT NOT NULL,
+            translated_text TEXT NOT NULL,
+            PRIMARY KEY (original_text, target_lang)
+        )
+    ''')
+    # 본문 번역 캐시 테이블
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS translation_cache (
+            chapter_id INTEGER NOT NULL,
+            target_lang TEXT NOT NULL,
+            translated_text TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (chapter_id, target_lang),
+            FOREIGN KEY (chapter_id) REFERENCES chapters (id)
         )
     ''')
     conn.commit()
@@ -146,3 +166,43 @@ def delete_novel(novel_id: int):
         return {"error": f"DB 삭제 오류: {e}"}
     finally:
         conn.close()
+
+def get_cached_translation(original_text: str, target_lang: str):
+    """DB 캐시에서 번역된 텍스트를 가져옵니다."""
+    conn = get_db_connection()
+    result = conn.execute(
+        "SELECT translated_text FROM title_translations WHERE original_text = ? AND target_lang = ?",
+        (original_text, target_lang)
+    ).fetchone()
+    conn.close()
+    return result['translated_text'] if result else None
+
+def cache_translation(original_text: str, target_lang: str, translated_text: str):
+    """번역된 텍스트를 DB 캐시에 저장합니다."""
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO title_translations (original_text, target_lang, translated_text) VALUES (?, ?, ?)",
+        (original_text, target_lang, translated_text)
+    )
+    conn.commit()
+    conn.close()
+
+def get_translation_from_cache(chapter_id: int, target_lang: str):
+    """DB 캐시에서 번역된 본문을 가져옵니다."""
+    conn = get_db_connection()
+    result = conn.execute(
+        "SELECT translated_text FROM translation_cache WHERE chapter_id = ? AND target_lang = ?",
+        (chapter_id, target_lang)
+    ).fetchone()
+    conn.close()
+    return result['translated_text'] if result else None
+
+def save_translation_to_cache(chapter_id: int, target_lang: str, translated_text: str):
+    """번역된 본문을 DB 캐시에 저장합니다."""
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO translation_cache (chapter_id, target_lang, translated_text) VALUES (?, ?, ?)",
+        (chapter_id, target_lang, translated_text)
+    )
+    conn.commit()
+    conn.close()
