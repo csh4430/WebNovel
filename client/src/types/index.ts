@@ -16,5 +16,5 @@ export interface Chapter {
   chapter_title: string;
   chapter_url: string;
   created_at: string;
-  content?: string; 
+  content?: string;
 }
