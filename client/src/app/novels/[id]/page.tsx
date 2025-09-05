@@ -29,6 +29,7 @@ export default function NovelDetailPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retries, setRetries] = useState(0);
   const [showCharManager, setShowCharManager] = useState(false);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
@@ -38,6 +39,7 @@ export default function NovelDetailPage() {
     let aborted = false;
     setLoading(true);
     setError(null);
+    const maxRetries = 3;
 
     Promise.all([
       fetch(`/api/novels/${novelId}`),
@@ -62,6 +64,12 @@ export default function NovelDetailPage() {
       })
       .catch((err: unknown) => {
         console.error('API 통신 에러:', err);
+        if (retries < maxRetries) {
+          console.log(`재시도 (${retries + 1}/${maxRetries})...`);
+          setRetries(prev => prev + 1);
+          return;
+        }
+
         if (!aborted) setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
@@ -70,7 +78,7 @@ export default function NovelDetailPage() {
 
     return () => {
       aborted = true; // ✅ 컴포넌트 언마운트 시 상태 업데이트 방지
-    };
+    }; // novelId가 변경될 때마다 useEffect가 실행되도록 함
   }, [novelId]);
 
   const groupedChapters = useMemo(() => {
@@ -83,11 +91,12 @@ export default function NovelDetailPage() {
     }, {});
   }, [chapters]);
 
-  // (선택) 첫 그룹 자동 오픈
+  const [initialGroupOpen, setInitialGroupOpen] = useState(false);
   useEffect(() => {
     const entries = Object.keys(groupedChapters);
-    if (entries.length && openGroups.size === 0) {
+    if (entries.length && openGroups.size === 0 && !initialGroupOpen) {
       setOpenGroups(new Set([entries[0]]));
+      setInitialGroupOpen(true);
     }
   }, [groupedChapters, openGroups.size]);
 

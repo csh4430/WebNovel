@@ -18,27 +18,27 @@ export default function ChapterViewerPage() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const novelId = params.id as string;
     const chapterId = params.chapterId as string;
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+    
+    // 일반 API 요청은 프록시(/api/...)를 사용하고, 스트리밍만 직접 연결합니다.
+    const PROXY_API_URL = ''; // 프록시를 위한 상대 경로
+    const STREAMING_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     
     const eventSourceRef = useRef<EventSource | null>(null);
 
-    // 1. 스트리밍을 시작하는 함수 (재번역 포함)
-    const startStreaming = (force = false) => {
+    const startStreamingTranslation = (force = false) => {
         if (!chapterId) return;
-
-        // 기존 연결이 있다면 확실히 종료
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
         }
-
         setStatus('translating');
         setDisplayedText('');
 
-        let url = `${API_URL}/api/chapters/${chapterId}/translate-stream`;
+        // EventSource는 백엔드의 실제 주소로 직접 연결합니다.
+        let url = `${STREAMING_API_URL}/api/chapters/${chapterId}/translate-stream`;
         if (force) {
             url += '?force=true';
         }
-
+        
         const newEventSource = new EventSource(url);
         eventSourceRef.current = newEventSource;
 
@@ -66,31 +66,44 @@ export default function ChapterViewerPage() {
         };
     };
 
-    // 2. 챕터가 변경될 때 실행되는 메인 로직 (단순화된 구조)
+    const handleReTranslate = () => {
+        startStreamingTranslation(true);
+    };
+    
     useEffect(() => {
         if (!chapterId || !novelId) return;
 
         setStatus('loading');
         setDisplayedText('');
+        setChapter(null);
 
-        // 챕터 메타데이터(제목, 전체 목록)를 먼저 가져옵니다.
-        Promise.all([
-            fetch(`${API_URL}/api/chapters/${chapterId}`),
-            fetch(`${API_URL}/api/novels/${novelId}/chapters`),
-        ])
-        .then(async ([chapterRes, listRes]) => {
-            if (!chapterRes.ok || !listRes.ok) throw new Error('데이터를 가져오는 데 실패했습니다.');
-            setChapter(await chapterRes.json());
-            setChapterList(await listRes.json());
-            // 메타데이터 로딩이 성공하면, 번역 스트리밍을 시작합니다.
-            startStreaming();
-        })
-        .catch(error => {
-            console.error("초기 데이터 로딩 에러:", error);
-            setStatus('error');
-        });
+        const fetchInitialData = async () => {
+            try {
+                // 일반 fetch 요청은 프록시를 통해 안전하게 요청합니다.
+                const [chapterRes, listRes] = await Promise.all([
+                    fetch(`${PROXY_API_URL}/api/chapters/${chapterId}`),
+                    fetch(`${PROXY_API_URL}/api/novels/${novelId}/chapters`),
+                ]);
+                if (!chapterRes.ok || !listRes.ok) throw new Error('데이터를 가져오는 데 실패했습니다.');
+                setChapter(await chapterRes.json());
+                setChapterList(await listRes.json());
+                
+                const cachedRes = await fetch(`${PROXY_API_URL}/api/chapters/${chapterId}/translation`);
+                if (cachedRes.ok) {
+                    const data = await cachedRes.json();
+                    setDisplayedText(data.translatedText);
+                    setStatus('done');
+                } else {
+                    startStreamingTranslation(false);
+                }
+            } catch (error) {
+                console.error("API 통신 에러:", error);
+                setStatus('error');
+            }
+        };
 
-        // 3. 컴포넌트가 사라질 때 스트리밍 연결을 확실히 종료합니다.
+        fetchInitialData();
+
         return () => {
             if (eventSourceRef.current) {
                 eventSourceRef.current.close();
@@ -116,7 +129,7 @@ export default function ChapterViewerPage() {
             <nav className="max-w-4xl mx-auto mb-4 flex justify-between items-center gap-4 relative z-40">
                 <Link href={`/novels/${novelId}`} className="text-primary hover:underline whitespace-nowrap">&larr; 챕터 목록</Link>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => startStreaming(true)} disabled={status === 'translating'} className="bg-primary text-primary-foreground px-4 py-2 rounded-md disabled:opacity-50 whitespace-nowrap">재번역</button>
+                    <button onClick={handleReTranslate} disabled={status === 'translating'} className="bg-primary text-primary-foreground px-4 py-2 rounded-md disabled:opacity-50 whitespace-nowrap">재번역</button>
                     <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-md hover:bg-muted"><Settings /></button>
                 </div>
             </nav>
