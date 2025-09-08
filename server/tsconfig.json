@@ -1,6 +1,4 @@
-// /WebNovel/server/tsconfig.json
-{
-  "compilerOptions": {
+{  "compilerOptions": {
     "target": "ES6",
     "module": "commonjs",
     "outDir": "./dist",
@@ -10,6 +8,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src"],
+  "include": ["src", "../client/src/lib/utils.ts"],
   "exclude": ["node_modules"]
 }

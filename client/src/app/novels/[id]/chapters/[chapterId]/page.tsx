@@ -20,20 +20,59 @@ export default function ChapterViewerPage() {
     const chapterId = params.chapterId as string;
     
     // 일반 API 요청은 프록시(/api/...)를 사용하고, 스트리밍만 직접 연결합니다.
-    const PROXY_API_URL = ''; // 프록시를 위한 상대 경로
+    const PROXY_API_URL = ''; 
     const STREAMING_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     
     const eventSourceRef = useRef<EventSource | null>(null);
 
+    // 1. [데이터 로딩 useEffect] 챕터 기본 정보와 전체 목록만 불러옵니다.
+    useEffect(() => {
+        if (!chapterId || !novelId) return;
+
+        setStatus('loading');
+        setDisplayedText('');
+        setChapter(null);
+
+        // 이전/다음 화 목록 가져오기
+        fetch(`${PROXY_API_URL}/api/novels/${novelId}/chapters`)
+            .then(res => res.ok ? res.json() : Promise.reject('Failed to load chapter list'))
+            .then(setChapterList)
+            .catch(err => console.error("Chapter list fetch error:", err));
+
+        // 현재 챕터 제목 정보 가져오기
+        fetch(`${PROXY_API_URL}/api/chapters/${chapterId}`)
+            .then(res => res.ok ? res.json() : Promise.reject('Failed to load chapter metadata'))
+            .then(setChapter) // 이 setChapter가 호출되어야 다음 useEffect가 실행됨
+            .catch(err => {
+                console.error("Chapter metadata fetch error:", err)
+                setStatus('error');
+            });
+            
+    }, [chapterId, novelId]);
+
+    // 2. [스트리밍 useEffect] chapter 상태가 성공적으로 설정된 후에만 실행됩니다.
+    useEffect(() => {
+        // chapter 데이터가 있을 때만 스트리밍을 시작합니다.
+        if (chapter) {
+            startStreamingTranslation(false);
+        }
+
+        // 컴포넌트가 사라질 때 스트리밍 연결을 확실히 종료합니다.
+        return () => {
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+            }
+        };
+    }, [chapter]); // chapter가 설정되면 이 effect가 실행됩니다.
+
+    // 스트리밍을 시작하는 함수 (재번역 포함)
     const startStreamingTranslation = (force = false) => {
         if (!chapterId) return;
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-        }
+        if (eventSourceRef.current) eventSourceRef.current.close();
+        
         setStatus('translating');
         setDisplayedText('');
 
-        // EventSource는 백엔드의 실제 주소로 직접 연결합니다.
         let url = `${STREAMING_API_URL}/api/chapters/${chapterId}/translate-stream`;
         if (force) {
             url += '?force=true';
@@ -59,57 +98,13 @@ export default function ChapterViewerPage() {
         };
 
         newEventSource.onerror = () => {
+            // 이미 성공적으로 완료된 경우는 에러로 처리하지 않음
             if (status !== 'done') {
                 setStatus('error');
                 newEventSource.close();
             }
         };
     };
-
-    const handleReTranslate = () => {
-        startStreamingTranslation(true);
-    };
-    
-    useEffect(() => {
-        if (!chapterId || !novelId) return;
-
-        setStatus('loading');
-        setDisplayedText('');
-        setChapter(null);
-
-        const fetchInitialData = async () => {
-            try {
-                // 일반 fetch 요청은 프록시를 통해 안전하게 요청합니다.
-                const [chapterRes, listRes] = await Promise.all([
-                    fetch(`${PROXY_API_URL}/api/chapters/${chapterId}`),
-                    fetch(`${PROXY_API_URL}/api/novels/${novelId}/chapters`),
-                ]);
-                if (!chapterRes.ok || !listRes.ok) throw new Error('데이터를 가져오는 데 실패했습니다.');
-                setChapter(await chapterRes.json());
-                setChapterList(await listRes.json());
-                
-                const cachedRes = await fetch(`${PROXY_API_URL}/api/chapters/${chapterId}/translation`);
-                if (cachedRes.ok) {
-                    const data = await cachedRes.json();
-                    setDisplayedText(data.translatedText);
-                    setStatus('done');
-                } else {
-                    startStreamingTranslation(false);
-                }
-            } catch (error) {
-                console.error("API 통신 에러:", error);
-                setStatus('error');
-            }
-        };
-
-        fetchInitialData();
-
-        return () => {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-            }
-        };
-    }, [chapterId, novelId]);
     
     const currentIndex = chapterList.findIndex(c => c.id === Number(chapterId));
     const prevChapter = currentIndex > 0 ? chapterList[currentIndex - 1] : null;
@@ -129,7 +124,7 @@ export default function ChapterViewerPage() {
             <nav className="max-w-4xl mx-auto mb-4 flex justify-between items-center gap-4 relative z-40">
                 <Link href={`/novels/${novelId}`} className="text-primary hover:underline whitespace-nowrap">&larr; 챕터 목록</Link>
                 <div className="flex items-center gap-2">
-                    <button onClick={handleReTranslate} disabled={status === 'translating'} className="bg-primary text-primary-foreground px-4 py-2 rounded-md disabled:opacity-50 whitespace-nowrap">재번역</button>
+                    <button onClick={() => startStreamingTranslation(true)} disabled={status === 'translating'} className="bg-primary text-primary-foreground px-4 py-2 rounded-md disabled:opacity-50 whitespace-nowrap">재번역</button>
                     <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-md hover:bg-muted"><Settings /></button>
                 </div>
             </nav>

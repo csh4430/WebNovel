@@ -6,6 +6,7 @@ export interface Novel {
   novel_url: string;
   created_at: string | null;
   updated_at: string | null;
+  synopsis?: string;
 }
 
 export interface Chapter {

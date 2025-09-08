@@ -1,3 +1,5 @@
+// /WebNovel/client/src/app/layout.tsx
+
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeProvider";
@@ -25,11 +27,10 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="dark"
           enableSystem={false}
+          disableTransitionOnChange
         >
-          <div className="bg-background text-foreground">
             {children}
             <ThemeToggleButton />
-          </div>
         </ThemeProvider>
       </body>
     </html>

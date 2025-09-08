@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { openDb } from '../lib/db';
 import { fetchChapterContent } from '../services/scraperService';
-import { transcreateWithGemini, transcreateWithGeminiStream } from '../services/geminiService';
+import { transcreateWithGeminiStream } from '../services/geminiService';
 
 const router = Router();
 
@@ -11,51 +11,39 @@ router.get('/:id', async (req: Request, res: Response) => {
     try {
         const db = await openDb();
         const chapter = await db.get(`
-            SELECT chapters.*, novels.ncode FROM chapters
-            JOIN novels ON chapters.novel_id = novels.id
-            WHERE chapters.id = ?
+            SELECT c.*, n.ncode 
+            FROM chapters c 
+            JOIN novels n ON c.novel_id = n.id 
+            WHERE c.id = ?
         `, [id]);
+
         if (!chapter) {
             await db.close();
             return res.status(404).json({ error: '챕터를 찾을 수 없습니다.' });
         }
-        const urlToScrape = `https://ncode.syosetu.com/${chapter.ncode}/${chapter.chapter_number}/`;
-        const content = await fetchChapterContent(urlToScrape);
-        await db.close();
-        res.json({ ...chapter, content });
+        res.json(chapter);
     } catch (error) {
         res.status(500).json({ error: '챕터 정보를 가져오는 데 실패했습니다.' });
     }
 });
 
-// POST /api/chapters/:id/translate (재번역 시 사용)
-router.post('/:id/translate', async (req: Request, res: Response) => {
+// GET /api/chapters/:id/translation
+router.get('/:id/translation', async (req: Request, res: Response) => {
     const { id: chapterId } = req.params;
-    const { targetLang, forceReTranslate } = req.body;
-    if (!targetLang) return res.status(400).json({ error: 'targetLang가 필요합니다.' });
-    
     const db = await openDb();
     try {
-        const chapter = await db.get(`
-            SELECT chapters.*, novels.id as novelId, novels.ncode FROM chapters
-            JOIN novels ON chapters.novel_id = novels.id
-            WHERE chapters.id = ?
-        `, [chapterId]);
-        if (!chapter) {
-            await db.close();
-            return res.status(404).json({ error: '번역할 원본 챕터를 찾을 수 없습니다.' });
-        }
-        const originalContent = await fetchChapterContent(chapter.chapter_url);
-        const translatedText = await transcreateWithGemini(originalContent, 'Korean', chapter.novelId);
-        await db.run(
-            'INSERT OR REPLACE INTO translation_cache (chapter_id, target_lang, translated_text) VALUES (?, ?, ?)',
-            [chapterId, targetLang, translatedText]
+        const cached = await db.get(
+            'SELECT translated_text FROM translation_cache WHERE chapter_id = ? AND target_lang = ?', 
+            [chapterId, 'Korean']
         );
-        res.json({ translatedText });
-    } catch (error) {
-        res.status(500).json({ error: '챕터 번역 중 에러가 발생했습니다.' });
-    } finally {
         await db.close();
+        if (cached) {
+            res.json({ translatedText: cached.translated_text });
+        } else {
+            res.status(404).json({ message: '캐시된 번역본이 없습니다.' });
+        }
+    } catch(e) {
+        res.status(500).json({error: "캐시 확인 중 에러 발생"})
     }
 });
 
@@ -75,7 +63,9 @@ router.get('/:id/translate-stream', async (req: Request, res: Response) => {
     
     req.on('close', () => {
         clearInterval(heartbeatInterval);
-        if (!res.writableEnded) res.end();
+        if (!res.writableEnded) {
+            res.end();
+        }
     });
 
     try {
@@ -83,23 +73,26 @@ router.get('/:id/translate-stream', async (req: Request, res: Response) => {
         if (force !== 'true') {
             cached = await db.get('SELECT translated_text FROM translation_cache WHERE chapter_id = ? AND target_lang = ?', [chapterId, targetLang]);
         }
+
         if (cached) {
             res.write(`data: ${JSON.stringify({ text: cached.translated_text })}\n\n`);
         } else {
             const chapter = await db.get(`
-                SELECT chapters.*, novels.id as novelId, novels.ncode FROM chapters
-                JOIN novels ON chapters.novel_id = novels.id
-                WHERE chapters.id = ?
+                SELECT c.*, n.id as novelId, n.ncode 
+                FROM chapters c 
+                JOIN novels n ON c.novel_id = n.id 
+                WHERE c.id = ?
             `, [chapterId]);
             if (!chapter) throw new Error('챕터를 찾을 수 없습니다.');
+
             const originalContent = await fetchChapterContent(chapter.chapter_url);
             const stream = await transcreateWithGeminiStream(originalContent, targetLang, chapter.novelId);
+
             let fullText = '';
             for await (const chunk of stream) {
-              //console.log(chunk.text())
-              const chunkText = chunk.text();
-              fullText += chunkText;
-              res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
+                const chunkText = chunk.text();
+                fullText += chunkText;
+                res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
             }
             if (fullText) {
               await db.run(
@@ -108,13 +101,17 @@ router.get('/:id/translate-stream', async (req: Request, res: Response) => {
               );
             }
         }
+        
         res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+
     } catch (error: any) {
         res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
     } finally {
         clearInterval(heartbeatInterval);
         if(db) await db.close();
-        if (!res.writableEnded) res.end();
+        if (!res.writableEnded) {
+            res.end();
+        }
     }
 });
 

@@ -1,4 +1,3 @@
-// /WebNovel/client/src/components/CharacterManager.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -20,7 +19,7 @@ export default function CharacterManager({ novelId, onClose }: CharacterManagerP
   const [characters, setCharacters] = useState<Character[]>([]);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+  const API_URL = '';
 
   useEffect(() => {
     fetch(`${API_URL}/api/characters/novel/${novelId}`)
